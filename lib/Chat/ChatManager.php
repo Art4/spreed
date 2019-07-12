@@ -141,13 +141,17 @@ class ChatManager {
 	 * @param \DateTime $creationDateTime
 	 * @return IComment
 	 */
-	public function sendMessage(Room $chat, Participant $participant, string $actorType, string $actorId, string $message, \DateTime $creationDateTime): IComment {
+	public function sendMessage(Room $chat, Participant $participant, string $actorType, string $actorId, string $message, \DateTime $creationDateTime, int $replyTo): IComment {
 		$comment = $this->commentsManager->create($actorType, $actorId, 'chat', (string) $chat->getId());
 		$comment->setMessage($message, self::MAX_CHAT_LENGTH);
 		$comment->setCreationDateTime($creationDateTime);
 		// A verb ('comment', 'like'...) must be provided to be able to save a
 		// comment
 		$comment->setVerb('comment');
+
+		if ($replyTo !== 0) {
+			$comment->setParentId((string) $replyTo);
+		}
 
 		$this->dispatcher->dispatch(self::class . '::preSendMessage', new GenericEvent($chat, [
 			'comment' => $comment,
@@ -175,6 +179,22 @@ class ChatManager {
 				'participant' => $participant,
 			]));
 		} catch (NotFoundException $e) {
+		}
+
+		return $comment;
+	}
+
+	/**
+	 * @param Room $chat
+	 * @param int $parentId
+	 * @return IComment
+	 * @throws NotFoundException
+	 */
+	public function getParentComment(Room $chat, int $parentId): IComment {
+		$comment = $this->commentsManager->get((string) $parentId);
+
+		if ($comment->getObjectType() !== 'chat' || $comment->getObjectId() !== (string) $chat->getId()) {
+			throw new NotFoundException('Parent not found in the right context');
 		}
 
 		return $comment;
