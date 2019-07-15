@@ -149,9 +149,10 @@ class ChatController extends AEnvironmentAwareController {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
+		$parent = null;
 		if ($replyTo !== 0) {
 			try {
-				$this->chatManager->getParentComment($this->room, $replyTo);
+				$parent = $this->chatManager->getParentComment($this->room, $replyTo);
 			} catch (NotFoundException $e) {
 				// Someone is trying to reply cross-rooms or to a non-existing message
 				return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -162,7 +163,7 @@ class ChatController extends AEnvironmentAwareController {
 		$creationDateTime = $this->timeFactory->getDateTime('now', new \DateTimeZone('UTC'));
 
 		try {
-			$comment = $this->chatManager->sendMessage($this->room, $this->participant, $actorType, $actorId, $message, $creationDateTime, $replyTo);
+			$comment = $this->chatManager->sendMessage($this->room, $this->participant, $actorType, $actorId, $message, $creationDateTime, $parent);
 		} catch (MessageTooLongException $e) {
 			return new DataResponse([], Http::STATUS_REQUEST_ENTITY_TOO_LARGE);
 		} catch (\Exception $e) {

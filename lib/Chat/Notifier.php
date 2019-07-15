@@ -76,9 +76,10 @@ class Notifier {
 	 *
 	 * @param Room $chat
 	 * @param IComment $comment
+	 * @param array $mentionedUsers
 	 * @return string[] Users that were mentioned
 	 */
-	public function notifyMentionedUsers(Room $chat, IComment $comment): array {
+	public function notifyMentionedUsers(Room $chat, IComment $comment, array $mentionedUsers): array {
 		$mentionedUserIds = $this->getMentionedUserIds($comment);
 		if (empty($mentionedUserIds)) {
 			return [];
@@ -92,13 +93,49 @@ class Notifier {
 
 		$notification = $this->createNotification($chat, $comment, 'mention');
 		foreach ($mentionedUserIds as $mentionedUserId) {
+			if (in_array($mentionedUserId, $mentionedUsers, true)) {
+				continue;
+			}
+
 			if ($this->shouldUserBeNotified($mentionedUserId, $comment)) {
 				$notification->setUser($mentionedUserId);
 				$this->notificationManager->notify($notification);
+				$mentionedUsers[] = $mentionedUserId;
 			}
 		}
 
-		return $mentionedUserIds;
+		return $mentionedUsers;
+	}
+
+	/**
+	 * Notifies the author that wrote the comment which was replied to
+	 *
+	 * The comment must be a chat message comment. That is, its "objectId" must
+	 * be the room ID.
+	 *
+	 * Not every author mentioned in the message is notified, but only those that
+	 * are able to participate in the room.
+	 *
+	 * @param Room $chat
+	 * @param IComment $comment
+	 * @param IComment $replyTo
+	 * @return string[] Users that were mentioned
+	 */
+	public function notifyReplyToAuthor(Room $chat, IComment $comment, IComment $replyTo): array {
+		if ($replyTo->getActorType() !== 'users') {
+			// No reply notification when the replyTo-author was not a user
+			return [];
+		}
+
+		if (!$this->shouldUserBeNotified($replyTo->getActorId(), $comment)) {
+			return [];
+		}
+
+		$notification = $this->createNotification($chat, $comment, 'reply');
+		$notification->setUser($replyTo->getActorId());
+		$this->notificationManager->notify($notification);
+
+		return [$replyTo->getActorId()];
 	}
 
 	/**

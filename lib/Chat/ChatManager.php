@@ -138,10 +138,11 @@ class ChatManager {
 	 * @param string $actorType
 	 * @param string $actorId
 	 * @param string $message
+	 * @param int $replyTo
 	 * @param \DateTime $creationDateTime
 	 * @return IComment
 	 */
-	public function sendMessage(Room $chat, Participant $participant, string $actorType, string $actorId, string $message, \DateTime $creationDateTime, int $replyTo): IComment {
+	public function sendMessage(Room $chat, Participant $participant, string $actorType, string $actorId, string $message, \DateTime $creationDateTime, ?IComment $replyTo): IComment {
 		$comment = $this->commentsManager->create($actorType, $actorId, 'chat', (string) $chat->getId());
 		$comment->setMessage($message, self::MAX_CHAT_LENGTH);
 		$comment->setCreationDateTime($creationDateTime);
@@ -149,8 +150,8 @@ class ChatManager {
 		// comment
 		$comment->setVerb('comment');
 
-		if ($replyTo !== 0) {
-			$comment->setParentId((string) $replyTo);
+		if ($replyTo instanceof IComment) {
+			$comment->setParentId($replyTo->getId());
 		}
 
 		$this->dispatcher->dispatch(self::class . '::preSendMessage', new GenericEvent($chat, [
@@ -165,7 +166,12 @@ class ChatManager {
 			// Update last_message
 			$chat->setLastMessage($comment);
 
-			$mentionedUsers = $this->notifier->notifyMentionedUsers($chat, $comment);
+			$mentionedUsers = [];
+			if ($replyTo instanceof IComment) {
+				$mentionedUsers = $this->notifier->notifyReplyToAuthor($chat, $comment, $replyTo);
+			}
+
+			$mentionedUsers = $this->notifier->notifyMentionedUsers($chat, $comment, $mentionedUsers);
 			if (!empty($mentionedUsers)) {
 				$chat->markUsersAsMentioned($mentionedUsers, $creationDateTime);
 			}
